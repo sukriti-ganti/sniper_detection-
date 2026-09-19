@@ -1,0 +1,18 @@
+{
+  "name": "optical-anti-sniper-simulator",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser simulator of an optical anti-sniper sensor. Geometric optics only.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.186.0"
+  },
+  "devDependencies": {
+    "vite": "^8.3.0"
+  }
+}
