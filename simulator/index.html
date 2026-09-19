@@ -4,6 +4,7 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Optical Anti-Sniper Simulator</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='13' fill='none' stroke='%2337d0e0' stroke-width='2'/%3E%3Ccircle cx='16' cy='16' r='3' fill='%23ff4d5a'/%3E%3Cpath d='M16 1v7M16 24v7M1 16h7M24 16h7' stroke='%2337d0e0' stroke-width='2'/%3E%3C/svg%3E" />
 <link rel="stylesheet" href="./src/ui/theme.css" />
 </head>
 <body>
@@ -28,6 +29,7 @@
       <input type="checkbox" id="explain-toggle" /><span>Explain mode</span>
     </label>
     <button class="btn" id="btn-export">Export</button>
+    <button class="btn" id="btn-verify">Verify in Python</button>
     <button class="btn" id="btn-about">About</button>
     <button class="btn" id="btn-limits">Limits</button>
   </div>
@@ -55,7 +57,7 @@
     <label data-explain="el-range">Elevation range</label>
     <div class="pair">
       <input type="number" id="in-el-min" step="1" value="-2" /> to
-      <input type="number" id="in-el-max" step="1" value="12" /><span class="unit">deg</span>
+      <input type="number" id="in-el-max" step="1" value="25" /><span class="unit">deg</span>
     </div>
   </div>
 
@@ -126,6 +128,9 @@
 
   <p class="note">The alarm level is never a number we chose. We choose how
   often we are willing to be wrong, and the level follows from the wobble.</p>
+  <p class="assumed">ASSUMED: the background level, the noise and the extinction
+  for each set of conditions. The wobble and the level below are measured from
+  the sweep itself.</p>
 </section>
 
 <!-- -------------------------------------------------------- scene panel -->
@@ -152,6 +157,8 @@
   <div class="row buttons">
     <button class="btn" id="btn-flag">Flag selected as the sniper</button>
   </div>
+  <p class="assumed">ASSUMED: every target strength, width and colour ratio.
+  They are chosen for the right ratios between kinds, not measured.</p>
   <div class="row buttons">
     <label class="switch"><input type="checkbox" id="in-showrays" /><span>Draw sight lines</span></label>
     <label class="switch"><input type="checkbox" id="in-demopair" /><span>Scope beside a road sign</span></label>
@@ -241,6 +248,7 @@
   </div>
 </div>
 
+<button class="btn hidden" id="btn-polar-show">Plan view</button>
 <div id="tip" class="hidden"></div>
 <div id="toast" class="hidden"></div>
 

@@ -64,6 +64,7 @@ export function sweepToCsv(run) {
 
 export function runToJson(run) {
   const { plan, settings, detections, truth, scoring, results, rows } = run
+  const passive = run.passive_channel || []
 
   // Every peak the five steps found, in every line of the raster, before
   // anything was merged for display. This is what verify_detection.py
@@ -121,6 +122,7 @@ export function runToJson(run) {
       return_power: d.height, above_background: round(d.above, 3),
       alarm_level: round(d.level, 3), verdict: d.verdict
     })),
+    passive_channel: passive,
     ground_truth: truth,
     scoring: scoring || null
   }, null, 1)
@@ -243,6 +245,28 @@ def measure_width(angles, power, background, p):
     return abs(float(angles[j] - angles[i]))
 
 
+def merge_overlapping(peaks, widths, angles, power, level, min_sep_deg):
+    """ONE HUMP IS ONE DETECTION.
+
+    A fixed minimum separation cannot know how wide a hump is going to be.
+    Now that the widths are measured we can say it properly: if two peaks sit
+    closer together than their own half maximum widths, they are the same
+    object answering twice, and the taller one keeps it."""
+    order = sorted(peaks, key=lambda i: -(power[i] - level[i]))
+    kept = []
+    for p in order:
+        pw = min_sep_deg if widths[p] is None else widths[p]
+        clash = False
+        for q in kept:
+            qw = min_sep_deg if widths[q] is None else widths[q]
+            if abs(angles[p] - angles[q]) < 0.6 * (pw + qw):
+                clash = True
+                break
+        if not clash:
+            kept.append(p)
+    return sorted(kept)
+
+
 def classify(width, cutoff, beam_limit):
     """Narrower than our own beam means nobody is there. Otherwise narrow
     means an optic and wide means clutter."""
@@ -265,8 +289,9 @@ def main():
     beam = float(meta['beam_width_deg'])
     # nothing can answer narrower than the beam that lit it, so a spike
     # below this is the detector's own noise crossing the line
-    beam_limit = 1.25 * beam
-    min_sep = max(3, int(round(float(meta['min_separation_deg']) / step)))
+    beam_limit = 1.4 * beam
+    min_sep_deg = float(meta['min_separation_deg'])
+    min_sep = max(3, int(round(min_sep_deg / step)))
     far = float(meta['false_alarm_rate'])
     k = K_TABLE.get(far)
     if k is None:
@@ -295,8 +320,10 @@ def main():
         if not np.allclose(level, row[:, 4], rtol=1e-6, atol=1e-6):
             print('MISMATCH in alarm level at elevation', el)
 
-        for p in find_peaks(power, level, min_sep):
-            w = measure_width(angles, power, bg, p)
+        peaks = find_peaks(power, level, min_sep)
+        widths = {p: measure_width(angles, power, bg, p) for p in peaks}
+        for p in merge_overlapping(peaks, widths, angles, power, level, min_sep_deg):
+            w = widths[p]
             found.append({
                 'bearing': float(angles[p]), 'elevation': float(el),
                 'width': w, 'power': float(power[p]),

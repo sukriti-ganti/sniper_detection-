@@ -15,7 +15,7 @@ import { createLighting, applyPreset, PRESETS } from './world/lighting.js'
 
 import { makeRng } from './rng.js'
 import { placeTargets, makeTargetMarkers, makeTarget, activeTargets, scopeWidthFor } from './sim/targets.js'
-import { makeVisibility, geometryFor } from './sim/visibility.js'
+import { makeVisibility } from './sim/visibility.js'
 import { planSweep, Sweeper, sweepRow } from './sim/sweep.js'
 import { detect, localBackground, kFor, WINDOW_DEG } from './sim/detect.js'
 import { returnPower, detectionRange, angleDiff } from './sim/optics.js'
@@ -28,7 +28,7 @@ import { createWaterfall } from './ui/panels/waterfall.js'
 import { createPolar } from './ui/panels/polar.js'
 import { createDetectionsTable } from './ui/panels/detections.js'
 import { createTutorial } from './ui/panels/tutorial.js'
-import { exportForPython } from './export.js'
+import { exportRun, exportForPython } from './export.js'
 
 // ------------------------------------------------------------------ three
 const canvas = document.getElementById('view')
@@ -74,7 +74,7 @@ const S = {
   plan: null, sweeper: null, running: false, paused: false, singleStep: false,
   rows: [], results: [], detections: [], sweepCount: 0,
   viewRow: 0, followRow: true,
-  lastRun: null, passive: null, passiveLog: [],
+  lastRun: null, passive: null, passiveEvents: [],
   hunt: null, selected: null,
   beamAz: 0, beamEl: 4
 }
@@ -107,7 +107,8 @@ function buildScene() {
   S.sniper = new Sniper({
     world: S.world, visibility: S.visibility, rng,
     quality: S.cfg.quality, magnification: S.cfg.magnification,
-    difficulty: 'normal', hideFromSensor: S.cfg.hideHim
+    difficulty: 'normal', hideFromSensor: S.cfg.hideHim,
+    occupied: S.targets.map(t => t.position)
   })
   S.targets.push(S.sniper.target)
   S.sniperMarker = makeSniperMarker(scene)
@@ -189,6 +190,7 @@ function startSweep() {
   S.running = true
   S.paused = false
   S.followRow = true
+  S.selected = null
   hud.setSweepButton(true)
 }
 
@@ -200,7 +202,7 @@ function processRows(budgetMs) {
     const res = detect({
       angles: S.plan.angles, power: row.power, stepDeg: S.plan.azStep,
       far: S.cfg.far, cutoff: S.cfg.cutoff, windowDeg: WINDOW_DEG,
-      minSeparationDeg: Math.max(0.5, S.plan.beamWidth * 4), beamWidth: S.plan.beamWidth
+      minSeparationDeg: Math.max(1.5, S.plan.beamWidth * 6), beamWidth: S.plan.beamWidth
     })
     if (row.alt) res.altBackground = localBackground(row.alt, S.plan.azStep, WINDOW_DEG)
     S.rows.push(row)
@@ -232,6 +234,18 @@ function finishSweep() {
   const nearHim = S.detections.some(d =>
     Math.abs(angleDiff(d.bearing, S.sniper.target.bearing)) < 1.0 && d.verdict === 'OPTIC')
   S.sniper.noteSweep(nearHim)
+
+  // Show the line of the raster that has something in it, rather than
+  // whichever one happened to be last.
+  let bestRow = S.viewRow, bestScore = -Infinity
+  S.results.forEach((res, i) => {
+    for (const pk of res.peaks) {
+      const score = (pk.verdict === 'OPTIC' ? 1e6 : pk.verdict === 'clutter' ? 1e3 : 1) * pk.above
+      if (score > bestScore) { bestScore = score; bestRow = i }
+    }
+  })
+  S.viewRow = bestRow
+  S.followRow = false
 
   S.lastRun = makeRunRecord()
   tutorial.notify('sweep')
@@ -326,9 +340,10 @@ function makeRunRecord() {
       backgroundLevel: S.preset.backgroundLevel, noiseSigma: S.preset.noiseSigma,
       extinction: S.preset.extinction, far: S.cfg.far, k,
       cutoff: S.cfg.cutoff, windowDeg: WINDOW_DEG,
-      minSeparationDeg: Math.max(0.5, S.plan.beamWidth * 4),
+      minSeparationDeg: Math.max(1.5, S.plan.beamWidth * 6),
       twoColour: S.cfg.twoColour, quality: S.cfg.quality, magnification: S.cfg.magnification
     },
+    passive_channel: S.passiveEvents.slice(),
     truth: {
       note: 'what was really there, for checking only. the detector never reads this.',
       sniper: {
@@ -389,7 +404,14 @@ function handlePulse() {
   res.level = level
   res.detected = res.total > level
   S.passive = res
-  S.passiveLog.push({ t: performance.now(), total: res.total, detected: res.detected })
+  S.passiveEvents.push({
+    at_second: +((performance.now() - (S.hunt ? S.hunt.startedAt : 0)) / 1000).toFixed(1),
+    total: res.total, alarm_level: res.level, detected: res.detected,
+    terminal_spot: res.terminal, scattered_along_his_beam: res.scattered,
+    points_of_his_beam_in_view: res.visibleSamples, points_sampled: res.sampleCount,
+    bearing_of_the_far_end_deg: res.bearingHint ? +res.bearingHint.bearing.toFixed(2) : null
+  })
+  if (S.passiveEvents.length > 40) S.passiveEvents.shift()
 
   // draw his beam for a moment
   const p = pulseLine.geometry.attributes.position
@@ -499,7 +521,7 @@ function runComparison() {
     const power = sweepRow(targets, el, plan, preset, rng)
     const res = detect({
       angles: plan.angles, power, stepDeg: plan.azStep, far: S.cfg.far,
-      cutoff: S.cfg.cutoff, minSeparationDeg: Math.max(0.5, plan.beamWidth * 4),
+      cutoff: S.cfg.cutoff, minSeparationDeg: Math.max(1.5, plan.beamWidth * 6),
       beamWidth: plan.beamWidth
     })
     const threshold = res.wobble * k
@@ -510,7 +532,6 @@ function runComparison() {
       optics: res.peaks.filter(p => p.verdict === 'OPTIC').length,
       scopeRange: detectionRange(9.0e6, preset.extinction, threshold),
       signRange: detectionRange(3.0e4, preset.extinction, threshold),
-      sniperSeen: res.peaks.some(p => Math.abs(angleDiff(p.azimuth, S.sniper.target.bearing)) < 1.0)
     })
   }
   const night = rows.find(r => r.key === 'night'), day = rows.find(r => r.key === 'day')
@@ -548,7 +569,10 @@ hud.on('config', cfg => {
   S.cfg = cfg
   S.plan = currentPlan()
   hud.setPlan(S.plan)
-  hud.setExplainState({ ...cfg, azSpan: S.plan.azSpan, elSpan: S.plan.elSpan, positions: S.plan.beamPositions })
+  hud.setExplainState({
+    ...cfg, azSpan: S.plan.azSpan, elSpan: S.plan.elSpan,
+    positions: S.plan.beamPositions, priorityFloor: S.plan.priorityFloor
+  })
 })
 hud.on('detector', cfg => {
   S.cfg = cfg
@@ -584,11 +608,30 @@ hud.on('row', i => {
 hud.on('export', () => {
   if (!S.lastRun) { hud.toast('Run a sweep first, then the export will have something to say.'); return }
   S.lastRun = makeRunRecord()
+  exportRun(S.lastRun)
+  hud.toast('Written: the sweep as CSV, one line per sample, and the whole run as JSON ' +
+            'including the seed, every setting and what was really out there.', 7000)
+})
+hud.on('verify', () => {
+  if (!S.lastRun) { hud.toast('Run a sweep first. There is nothing to check yet.'); return }
+  S.lastRun = makeRunRecord()
   exportForPython(S.lastRun)
-  hud.toast('Written: the sweep as CSV, the run as JSON, and verify_detection.py. ' +
-            'Run: python verify_detection.py sweep_*.csv run_*.json', 8000)
+  hud.showModal(`
+    <h3>Check these numbers yourself</h3>
+    <p>Three files have been written to your downloads folder.</p>
+    <p style="font-family:ui-monospace,monospace;font-size:11.5px;color:#c9d6e2">
+      python verify_detection.py sweep_*.csv run_*.json</p>
+    <p>The script reads nothing but the raw returns in the first column of the
+    CSV. It works out the local background again, the wobble again, the alarm
+    level again, finds the peaks again and measures them again, using nothing
+    but numpy. Then it compares its own list against the one this program
+    produced and prints whether the two agree.</p>
+    <p>It needs numpy, and nothing else.</p>
+    <p class="assumed">This proves the browser is running the algorithm it says
+    it is running. It does not, and cannot, prove that the scene is real.</p>`)
 })
 hud.on('tutorial-event', e => tutorial.notify(e))
+hud.on('comparison-closed', () => setMode('free'))
 
 document.getElementById('tut-next').addEventListener('click', () => tutorial.next())
 document.getElementById('tut-back').addEventListener('click', () => tutorial.back())
@@ -617,7 +660,7 @@ function rerunDetection() {
     const res = detect({
       angles: S.plan.angles, power: row.power, stepDeg: S.plan.azStep,
       far: S.cfg.far, cutoff: S.cfg.cutoff,
-      minSeparationDeg: Math.max(0.5, S.plan.beamWidth * 4), beamWidth: S.plan.beamWidth
+      minSeparationDeg: Math.max(1.5, S.plan.beamWidth * 6), beamWidth: S.plan.beamWidth
     })
     if (row.alt) res.altBackground = localBackground(row.alt, S.plan.azStep, WINDOW_DEG)
     return res
@@ -656,7 +699,10 @@ function frame() {
   slowClock += dt
 
   if (S.running && !S.paused) {
-    processRows(7)
+    // Use about a third of whatever the frame is costing anyway. On a quick
+    // machine that is a few milliseconds and the beam appears to turn; on a
+    // slow one it is more, so the sweep still finishes in about a second.
+    processRows(Math.max(7, Math.min(60, dt * 1000 * 0.35)))
     const progress = S.rows.length / Math.max(1, S.plan.nEl)
     S.beamAz = S.plan.azMin + ((now / 220) % 1) * S.plan.azSpan
     S.beamEl = S.plan.elMin + progress * Math.max(0.001, S.plan.elSpan)
@@ -673,7 +719,7 @@ function frame() {
     if (ev.fired) onFired()
     const t = S.sniper.timeToShot
     if (showReadouts) hud.setScene({
-      state: `${S.sniper.state.toLowerCase()} — ${S.sniper.describe()}`,
+      state: S.sniper.state.toLowerCase(),
       los: S.sniper.blockedFromSensor ? 'blocked' : 'clear',
       countdown: S.sniper.state === 'Fired' ? 'fired' : `${t.toFixed(0)} s`,
       urgent: t < 20
@@ -681,7 +727,10 @@ function frame() {
     if (S.hunt && !S.hunt.outcome && showReadouts) {
       hud.setHunt({ show: true, clock: `${Math.max(0, t).toFixed(0)} s`, urgent: t < 20 })
     }
-    if (showReadouts) slowClock = 0
+    if (showReadouts) {
+      hud.setExplainState({ sniperWhat: S.sniper.describe(), offAxis: S.sniper.lastOffAxis })
+      slowClock = 0
+    }
   }
 
   if (pulseFade > 0) {

@@ -12,14 +12,19 @@ export function makeVisibility(occluders) {
   ray.firstHitOnly = true
   const dir = new THREE.Vector3()
   let rayCount = 0
+  // where the last ray stopped, when something stopped it
+  let lastHit = null
 
   return {
     get rayCount() { return rayCount },
     resetCount() { rayCount = 0 },
     setOccluders(list) { occluders = list },
 
+    get lastHit() { return lastHit },
+
     // true if nothing stands between `from` and `to`
     clear(from, to) {
+      lastHit = null
       dir.subVectors(to, from)
       const dist = dir.length()
       if (dist < 1e-6) return true
@@ -32,6 +37,7 @@ export function makeVisibility(occluders) {
       if (ray.far <= ray.near) return true
       rayCount++
       const hits = ray.intersectObjects(occluders, false)
+      if (hits.length) lastHit = hits[0].point.clone()
       return hits.length === 0
     },
 
@@ -40,6 +46,8 @@ export function makeVisibility(occluders) {
       for (const t of targets) {
         geometryFor(t, sensorPos)
         t.visible = this.clear(sensorPos, t.position)
+        // remember where the ray stopped, so the picture can show it
+        t.blockedAt = t.visible ? null : this.lastHit
         if (t.gate && !t.gate()) t.visible = false   // e.g. a covered scope
       }
     }

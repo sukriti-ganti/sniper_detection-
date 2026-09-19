@@ -29,7 +29,7 @@ const DURATION = {
 
 export class Sniper {
   constructor({ world, visibility, rng, quality = 100, magnification = 10,
-                difficulty = 'normal', hideFromSensor = false }) {
+                difficulty = 'normal', hideFromSensor = false, occupied = [] }) {
     this.world = world
     this.visibility = visibility
     this.rng = rng
@@ -37,6 +37,7 @@ export class Sniper {
     this.magnification = magnification
     this.quality = quality
     this.hideFromSensor = hideFromSensor
+    this.occupied = occupied      // rooftops already holding something else
 
     this.state = 'Hidden'
     this.stateLeft = 4
@@ -64,7 +65,16 @@ export class Sniper {
     const scored = []
     for (const r of world.rooftops) {
       const range = r.pos.distanceTo(sensor)
-      if (range < 160 || range > 760) continue
+      // Close in, the angle between us and the thing he is aiming at is
+      // wider than his own field of view, and he would never answer our
+      // beam at all. Keep him where the problem is interesting.
+      if (range < 220 || range > 760) continue
+      // Not on top of something else that is already up there.
+      if (this.occupied.some(q => q.distanceTo(r.pos) < 12)) continue
+      // A man shooting at a target on the ground wants a shallow angle, not
+      // a plunging one. That also keeps him inside a sane scan sector.
+      const elevation = Math.atan2(r.pos.y - sensor.y, Math.hypot(r.pos.x - sensor.x, r.pos.z - sensor.z))
+      if (elevation * 180 / Math.PI > 26) continue
       if (avoid && r.pos.distanceTo(avoid) < 60) continue
       const seesTarget = visibility.clear(r.pos, prot)
       if (!seesTarget) continue                    // he must be able to see his target

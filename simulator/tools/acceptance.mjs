@@ -239,8 +239,9 @@ check('12. nothing claims capability the simulator does not have',
 await sweep()
 const downloads = []
 page.on('download', dl => downloads.push(dl))
-await page.click('#btn-export')
-await page.waitForTimeout(3000)
+await page.click('#btn-verify')
+await page.waitForTimeout(3500)
+await page.click('#modal-close').catch(() => {})
 const saved = {}
 for (const dl of downloads) {
   const name = dl.suggestedFilename()

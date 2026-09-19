@@ -16,7 +16,7 @@ export function ramp(t) {
 
 export function createWaterfall(canvas, barCanvas, loLabel, hiLabel) {
   const ctx = canvas.getContext('2d')
-  const W = 320, H = 150
+  const W = 320, H = 150, BAND = 3   // pixels per sweep, so a single sweep is visible
   const buf = ctx.createImageData(W, H)
   buf.data.fill(0)
   let lo = 3, hi = 6
@@ -31,15 +31,14 @@ export function createWaterfall(canvas, barCanvas, loLabel, hiLabel) {
       b.fillStyle = `rgb(${r | 0},${g | 0},${bl | 0})`
       b.fillRect(x, 0, 1, 10)
     }
-    if (loLabel) loLabel.textContent = `1e${lo.toFixed(1)}`
-    if (hiLabel) hiLabel.textContent = `1e${hi.toFixed(1)}`
+    const show = v => Math.pow(10, v).toExponential(1).replace('e+', 'e')
+    if (loLabel) loLabel.textContent = show(lo)
+    if (hiLabel) hiLabel.textContent = show(hi)
   }
 
   function blit() {
-    const r = canvas.getBoundingClientRect()
-    canvas.width = W; canvas.height = H
+    if (canvas.width !== W || canvas.height !== H) { canvas.width = W; canvas.height = H }
     ctx.putImageData(buf, 0, 0)
-    void r
   }
 
   return {
@@ -48,8 +47,9 @@ export function createWaterfall(canvas, barCanvas, loLabel, hiLabel) {
     // power is the strongest return seen at each azimuth during one sweep
     push(power) {
       const n = power.length
-      // scroll down by one row
-      buf.data.copyWithin(W * 4, 0, W * (H - 1) * 4)
+      // scroll down by one band
+      buf.data.copyWithin(W * 4 * BAND, 0, W * (H - BAND) * 4)
+      const line = new Uint8ClampedArray(W * 4)
       for (let x = 0; x < W; x++) {
         const i0 = Math.floor(x / W * n)
         const i1 = Math.max(i0 + 1, Math.floor((x + 1) / W * n))
@@ -58,8 +58,9 @@ export function createWaterfall(canvas, barCanvas, loLabel, hiLabel) {
         const t = (Math.log10(Math.max(1, m)) - lo) / (hi - lo)
         const [r, g, b] = ramp(t)
         const o = x * 4
-        buf.data[o] = r; buf.data[o + 1] = g; buf.data[o + 2] = b; buf.data[o + 3] = 255
+        line[o] = r; line[o + 1] = g; line[o + 2] = b; line[o + 3] = 255
       }
+      for (let y = 0; y < BAND; y++) buf.data.set(line, y * W * 4)
       rows++
       blit()
     },

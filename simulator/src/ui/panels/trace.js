@@ -25,9 +25,7 @@ export function createTracePanel(canvas) {
   canvas.addEventListener('click', ev => {
     if (!last) return
     const r = canvas.getBoundingClientRect()
-    const x = ev.clientX - r.left
-    const { w } = { w: r.width }
-    const az = last.xToAz(x, w)
+    const az = last.xToAz(ev.clientX - r.left, r.width)
     let best = null, bestD = 1e9
     for (const p of last.peaks) {
       const d = Math.abs(p.azimuth - az)

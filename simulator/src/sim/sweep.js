@@ -26,15 +26,21 @@ export function planSweep(cfg) {
   // Priority scan: do not waste time below the rooftops. The skyline comes
   // from the building list, so this only moves the sector. It never touches
   // a single detection number.
+  // We take the skyline a quarter of the way up across the sector, not its
+  // lowest point, because one gap between two blocks should not drag the
+  // whole scan back down to the ground, and not its middle either, because
+  // that would throw away the low rooftops entirely. A band of at least four
+  // degrees is always kept. The cost is plain: anything below this line is
+  // not being looked at at all.
   let priorityFloor = null
   if (cfg.priority && world) {
-    let lowest = Infinity
-    for (let a = Math.floor(azMin); a <= Math.ceil(azMax); a++) {
-      lowest = Math.min(lowest, world.skylineAt(a))
-    }
-    if (isFinite(lowest)) {
-      priorityFloor = Math.max(elMin, lowest - 1.0)
-      if (priorityFloor < elMax - 0.5) elMin = priorityFloor
+    const line = []
+    for (let a = Math.floor(azMin); a <= Math.ceil(azMax); a++) line.push(world.skylineAt(a))
+    line.sort((x, y) => x - y)
+    const low = line.length ? line[Math.floor(line.length * 0.25)] : 0
+    if (isFinite(low)) {
+      const floor = Math.min(low - 1.0, elMax - 4.0)
+      if (floor > elMin) { priorityFloor = floor; elMin = floor }
     }
   }
 

@@ -29,7 +29,8 @@ const EXPLAIN = {
   seed: () => 'The same seed rebuilds exactly the same city and the same targets, so a result can be repeated and checked.',
   quality: s => `How well made his scope is. At 100 it throws back a needle ${s.scopeWidth.toFixed(2)} degrees wide. At 0 it is a cheap optic and its answer is nearly as wide as a road sign, which is when we lose him.`,
   magnification: s => `At ${s.magnification}x his field of view is about ${(40 / s.magnification).toFixed(1)} degrees. He only answers our beam when we are inside that cone.`,
-  'sniper-state': () => 'What he is doing. You cannot see this in a real situation: it is here so you can watch cause and effect.',
+  'sniper-state': s => `${s.sniperWhat || 'waiting'}. You could not see this in a real situation: it is here so you can watch cause and effect.` +
+    (s.offAxis !== undefined && s.offAxis !== null ? ` Right now his scope is pointed ${s.offAxis.toFixed(1)} degrees off us.` : ''),
   'sniper-los': () => 'Whether a straight line from the sensor to him is clear of buildings. Worked out by casting a ray at the actual geometry.',
   passive: () => 'When he ranges his target with a laser, his beam ends here beside us. We do not need to see him for that.',
   countdown: () => 'How long until he fires, if nothing stops him.'
@@ -81,8 +82,16 @@ export function createHud() {
   els.rebuild.addEventListener('click', () => emit('rebuild'))
   els.flag.addEventListener('click', () => emit('flag'))
   $('btn-export').addEventListener('click', () => emit('export'))
+  $('btn-verify').addEventListener('click', () => emit('verify'))
   $('btn-clear-det').addEventListener('click', () => emit('clear'))
-  $('btn-polar-hide').addEventListener('click', () => $('panel-polar').classList.add('hidden'))
+  $('btn-polar-hide').addEventListener('click', () => {
+    $('panel-polar').classList.add('hidden')
+    $('btn-polar-show').classList.remove('hidden')
+  })
+  $('btn-polar-show').addEventListener('click', () => {
+    $('panel-polar').classList.remove('hidden')
+    $('btn-polar-show').classList.add('hidden')
+  })
 
   ;[els.azMin, els.azMax, els.elMin, els.elMax, els.priority].forEach(e =>
     e.addEventListener('change', () => emit('config', read())))

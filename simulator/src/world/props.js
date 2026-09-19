@@ -101,12 +101,12 @@ export function buildProps(scene, world, seed) {
 
   // ------------------------------------------------------------- checkpoint
   const hut = new THREE.Mesh(new THREE.BoxGeometry(6, 3.2, 5), concrete(0x333b45))
-  hut.position.set(world.protectedPos.x + 7, 1.6, world.protectedPos.z - 3)
+  hut.position.set(world.protectedPos.x + 9, 1.6, world.protectedPos.z - 5)
   hut.castShadow = hut.receiveShadow = true
   group.add(hut); occluders.push(hut)
 
   const canopy = new THREE.Mesh(new THREE.BoxGeometry(14, 0.3, 8), concrete(0x2b323b))
-  canopy.position.set(world.protectedPos.x + 3, 4.2, world.protectedPos.z - 2)
+  canopy.position.set(world.protectedPos.x + 5, 4.2, world.protectedPos.z - 4)
   canopy.castShadow = true
   group.add(canopy); occluders.push(canopy)
 

@@ -142,7 +142,7 @@ export function makeTargetMarkers(scene) {
 
   const lineGeo = new THREE.BufferGeometry()
   const lines = new THREE.LineSegments(lineGeo, new THREE.LineBasicMaterial({
-    vertexColors: true, transparent: true, opacity: 0.32, depthWrite: false
+    vertexColors: true, transparent: true, opacity: 0.45, depthWrite: false
   }))
   lines.visible = false
   lines.frustumCulled = false
@@ -160,9 +160,13 @@ export function makeTargetMarkers(scene) {
         pos[i * 3] = t.position.x; pos[i * 3 + 1] = t.position.y; pos[i * 3 + 2] = t.position.z
         const c = t.visible
           ? (t.optic ? [1.0, 0.30, 0.35] : [0.30, 0.85, 0.55])
-          : [0.35, 0.38, 0.42]
+          : [0.55, 0.22, 0.20]
         col.set(c, i * 3)
-        lp.set([sensorPos.x, sensorPos.y, sensorPos.z, t.position.x, t.position.y, t.position.z], i * 6)
+        // A blocked sight line is drawn only as far as the thing that blocks
+        // it. That is the ray stopping in a wall, and it is why the target
+        // returns nothing.
+        const end = (!t.visible && t.blockedAt) ? t.blockedAt : t.position
+        lp.set([sensorPos.x, sensorPos.y, sensorPos.z, end.x, end.y, end.z], i * 6)
         lc.set([...c, ...c], i * 6)
       })
       geo.setAttribute('position', new THREE.BufferAttribute(pos, 3))

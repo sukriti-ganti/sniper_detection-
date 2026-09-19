@@ -12,8 +12,11 @@ const VERDICT_TEXT = {
 export function createDetectionsTable(table) {
   const tbody = table.querySelector('tbody')
   let rows = []
-  let sortKey = 'width'
+  let sortKey = 'interest'
   let sortDir = 1
+  // OPTIC first, then clutter, then the detector's own noise. Within a
+  // group, the strongest return first.
+  const RANK = { OPTIC: 0, clutter: 1, unknown: 2, noise: 3 }
   let onSelect = () => {}
   let selectedId = null
 
@@ -31,6 +34,10 @@ export function createDetectionsTable(table) {
 
   function render() {
     const sorted = rows.slice().sort((a, b) => {
+      if (sortKey === 'interest') {
+        const r = (RANK[a.verdict] ?? 9) - (RANK[b.verdict] ?? 9)
+        return r !== 0 ? r : (b.height || 0) - (a.height || 0)
+      }
       const av = a[sortKey], bv = b[sortKey]
       if (typeof av === 'string') return sortDir * String(av).localeCompare(String(bv))
       const an = av === null || av === undefined ? 1e9 : av

@@ -271,6 +271,8 @@ td.v { text-align: left; }
 .cmp-table th, .cmp-table td { text-align: right; }
 .cmp-table td:first-child, .cmp-table th:first-child { text-align: left; }
 
+#btn-polar-show { position: fixed; left: 10px; bottom: 252px; z-index: 16; }
+
 #tip {
   position: fixed; z-index: 70; max-width: 300px; pointer-events: none;
   background: #0d141c; border: 1px solid var(--accent-2); border-radius: 3px;

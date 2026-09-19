@@ -31,7 +31,7 @@ export const DEFAULT_CUTOFF = 1.2  // degrees. narrower than this is an optic
 // is the detector's own noise crossing the line, which at one wrong alarm in
 // ten thousand it will do about seventeen times in a sweep of this size.
 // We say so rather than calling it an optic.
-export const BEAM_LIMIT_FACTOR = 1.25
+export const BEAM_LIMIT_FACTOR = 1.4
 
 // How many wobbles out we must go for a chosen rate of wrong alarms.
 // These are the inverse normal tail values. They are not adjustable knobs:
@@ -196,7 +196,7 @@ export function detect({ angles, power, stepDeg, far = 1e-4, cutoff = DEFAULT_CU
   const level = alarmLevel(background, wob, k)
   const minSep = Math.max(3, Math.round(minSeparationDeg / stepDeg))
 
-  const peaks = findPeaks(power, level, minSep).map(i => {
+  const found = findPeaks(power, level, minSep).map(i => {
     const width = measureWidth(angles, power, background, i)
     return {
       index: i,
@@ -209,5 +209,23 @@ export function detect({ angles, power, stepDeg, far = 1e-4, cutoff = DEFAULT_CU
       verdict: classify(width, cutoff, beamLimit)
     }
   })
+
+  // ONE HUMP IS ONE DETECTION.
+  // A fixed minimum separation cannot know how wide a hump is going to be.
+  // Now that the widths are measured we can say it properly: if two peaks
+  // sit closer together than their own half maximum widths, they are the
+  // same object answering twice, and the taller one keeps it.
+  const order = found.slice().sort((a, b) => b.above - a.above)
+  const kept = []
+  for (const p of order) {
+    const pw = p.width === null ? minSeparationDeg : p.width
+    const clash = kept.some(q => {
+      const qw = q.width === null ? minSeparationDeg : q.width
+      return Math.abs(p.azimuth - q.azimuth) < 0.6 * (pw + qw)
+    })
+    if (!clash) kept.push(p)
+  }
+  const peaks = kept.sort((a, b) => a.index - b.index)
+
   return { background, level, wobble: wob, k, beamLimit, peaks }
 }

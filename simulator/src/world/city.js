@@ -232,7 +232,7 @@ export function buildCity(scene, seed) {
   // --- ground ---------------------------------------------------------------
   const groundMat = new THREE.MeshStandardMaterial({ color: 0x0b0e12, roughness: 1.0, metalness: 0.0 })
   injectGroundGrid(groundMat)
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(2600, 2600), groundMat)
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(9000, 9000), groundMat)
   ground.rotation.x = -Math.PI / 2
   ground.receiveShadow = true
   ground.name = 'ground'
@@ -294,7 +294,9 @@ export function buildCity(scene, seed) {
   return {
     group, buildings, rooftops, facades, streets, skyline,
     sensorPos,
-    protectedPos: new THREE.Vector3(16, 1.7, -14),
+    // The protected point is a few metres from the mast, which is the whole
+    // reason the passive channel works: his rangefinder beam ends here.
+    protectedPos: new THREE.Vector3(5.0, 1.7, -4.5),
     occluders: [mesh, roofMesh],
     glowRef,
     materials: { wallMat, roofMat, groundMat, edges },
