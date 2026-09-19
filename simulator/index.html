@@ -1,0 +1,249 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Optical Anti-Sniper Simulator</title>
+<link rel="stylesheet" href="./src/ui/theme.css" />
+</head>
+<body>
+
+<canvas id="view"></canvas>
+<div id="loading">building the city&hellip;</div>
+
+<!-- ------------------------------------------------------------ top bar -->
+<header id="topbar">
+  <div class="brand">
+    <span class="brand-mark"></span>
+    <span class="brand-text">OPTICAL ANTI-SNIPER SIMULATOR<em>simulated scene &middot; geometric optics only</em></span>
+  </div>
+  <nav id="modes" class="tabs">
+    <button class="tab" data-mode="tutorial">Tutorial</button>
+    <button class="tab is-on" data-mode="free">Free scan</button>
+    <button class="tab" data-mode="hunt">Hunt</button>
+    <button class="tab" data-mode="comparison">Comparison</button>
+  </nav>
+  <div class="topbar-right">
+    <label class="switch" data-explain="explain-mode">
+      <input type="checkbox" id="explain-toggle" /><span>Explain mode</span>
+    </label>
+    <button class="btn" id="btn-export">Export</button>
+    <button class="btn" id="btn-about">About</button>
+    <button class="btn" id="btn-limits">Limits</button>
+  </div>
+</header>
+
+<!-- --------------------------------------------------------- scan panel -->
+<section class="panel" id="panel-scan">
+  <h2>Scan control <span class="hint">what the sensor does</span></h2>
+
+  <div class="row buttons">
+    <button class="btn primary" id="btn-sweep">Start sweep</button>
+    <button class="btn" id="btn-pause">Pause</button>
+    <button class="btn" id="btn-step">Single step</button>
+  </div>
+
+  <div class="row">
+    <label data-explain="az-sector">Azimuth sector</label>
+    <div class="pair">
+      <input type="number" id="in-az-min" step="5" value="-60" /> to
+      <input type="number" id="in-az-max" step="5" value="60" /><span class="unit">deg</span>
+    </div>
+  </div>
+
+  <div class="row">
+    <label data-explain="el-range">Elevation range</label>
+    <div class="pair">
+      <input type="number" id="in-el-min" step="1" value="-2" /> to
+      <input type="number" id="in-el-max" step="1" value="12" /><span class="unit">deg</span>
+    </div>
+  </div>
+
+  <div class="row slider">
+    <label data-explain="beam-width">Beam width <b id="out-beam">0.20</b><span class="unit">deg</span></label>
+    <input type="range" id="in-beam" min="0.05" max="1.6" step="0.05" value="0.2" />
+  </div>
+
+  <div class="row slider">
+    <label data-explain="dwell">Dwell per position <b id="out-dwell">2.0</b><span class="unit">ms</span></label>
+    <input type="range" id="in-dwell" min="0.1" max="10" step="0.1" value="2" />
+  </div>
+
+  <label class="switch" data-explain="priority"><input type="checkbox" id="in-priority" /><span>Priority scan (above the skyline only)</span></label>
+
+  <div class="readout">
+    <div data-explain="positions"><span>Beam positions</span><b id="out-positions">&mdash;</b></div>
+    <div data-explain="frametime"><span>Time for one frame</span><b id="out-frametime">&mdash;</b></div>
+    <div data-explain="samples"><span>Trace samples</span><b id="out-samples">&mdash;</b></div>
+    <div data-explain="scanrate"><span>Sweeps done</span><b id="out-sweeps">0</b></div>
+    <div data-explain="fps"><span>Drawing, per second</span><b id="out-fps">—</b></div>
+  </div>
+</section>
+
+<!-- ----------------------------------------------------- right hand rail -->
+<div id="rail-right">
+
+<!-- detector -->
+<section class="panel" id="panel-detect">
+  <h2>Detector <span class="hint">how we decide</span></h2>
+
+  <div id="verdict" class="verdict searching">SEARCHING</div>
+  <div id="verdict-counts" class="counts">—</div>
+
+  <div class="row">
+    <label data-explain="preset">Conditions</label>
+    <div class="seg" id="seg-preset">
+      <button data-preset="day">Day</button>
+      <button data-preset="dusk">Dusk</button>
+      <button class="is-on" data-preset="night">Night</button>
+      <button data-preset="fog">Fog</button>
+    </div>
+  </div>
+
+  <div class="row">
+    <label data-explain="far">False alarm rate</label>
+    <select id="in-far">
+      <option value="1e-2">1 wrong alarm in 100</option>
+      <option value="1e-3">1 wrong alarm in 1,000</option>
+      <option value="1e-4" selected>1 wrong alarm in 10,000</option>
+      <option value="1e-5">1 wrong alarm in 100,000</option>
+    </select>
+  </div>
+
+  <div class="readout tight">
+    <div data-explain="k"><span>Wobbles out (k)</span><b id="out-k">3.719</b></div>
+    <div data-explain="wobble"><span>Wobble</span><b id="out-wobble">&mdash;</b></div>
+    <div data-explain="level"><span>Alarm level</span><b id="out-level">&mdash;</b></div>
+    <div data-explain="background"><span>Background</span><b id="out-background">&mdash;</b></div>
+  </div>
+
+  <div class="row slider">
+    <label data-explain="cutoff">Width cutoff <b id="out-cutoff">1.20</b><span class="unit">deg</span></label>
+    <input type="range" id="in-cutoff" min="0.2" max="4" step="0.05" value="1.2" />
+  </div>
+
+  <label class="switch" data-explain="twocolour"><input type="checkbox" id="in-twocolour" /><span>Two-colour confirmation (1550 / 1064 nm)</span></label>
+
+  <p class="note">The alarm level is never a number we chose. We choose how
+  often we are willing to be wrong, and the level follows from the wobble.</p>
+</section>
+
+<!-- -------------------------------------------------------- scene panel -->
+<section class="panel" id="panel-scene">
+  <h2>Scene <span class="hint">the world and the man in it</span></h2>
+  <div class="row">
+    <label data-explain="seed">Seed</label>
+    <div class="pair"><input type="number" id="in-seed" value="7" step="1" /><button class="btn" id="btn-rebuild">Rebuild</button></div>
+  </div>
+  <div class="row slider">
+    <label data-explain="quality">Scope quality <b id="out-quality">100</b></label>
+    <input type="range" id="in-quality" min="0" max="100" step="1" value="100" />
+  </div>
+  <div class="row slider">
+    <label data-explain="magnification">His magnification <b id="out-mag">10</b>x<span class="unit" id="out-fov">4.0 deg cone</span></label>
+    <input type="range" id="in-mag" min="2" max="25" step="1" value="10" />
+  </div>
+  <div class="readout tight">
+    <div data-explain="sniper-state"><span>Sniper</span><b id="out-sniper">hidden</b></div>
+    <div data-explain="sniper-los"><span>Line of sight</span><b id="out-los">&mdash;</b></div>
+    <div data-explain="passive"><span>Passive channel</span><b id="out-passive">quiet</b></div>
+    <div data-explain="countdown"><span>Time to his shot</span><b id="out-countdown">&mdash;</b></div>
+  </div>
+  <div class="row buttons">
+    <button class="btn" id="btn-flag">Flag selected as the sniper</button>
+  </div>
+  <div class="row buttons">
+    <label class="switch"><input type="checkbox" id="in-showrays" /><span>Draw sight lines</span></label>
+    <label class="switch"><input type="checkbox" id="in-demopair" /><span>Scope beside a road sign</span></label>
+    <label class="switch"><input type="checkbox" id="in-hidehim" /><span>Put him out of our sight</span></label>
+    <label class="switch"><input type="checkbox" id="in-reveal" /><span>Reveal his position</span></label>
+  </div>
+</section>
+
+<section class="panel" id="panel-detections">
+  <h2>Detections <span class="hint">click a row to look at it</span>
+    <button class="btn tiny" id="btn-clear-det">clear</button></h2>
+  <div class="tablewrap">
+    <table id="tbl-detections">
+      <thead><tr>
+        <th data-sort="bearing">Bearing</th>
+        <th data-sort="elevation">Elev</th>
+        <th data-sort="range">Range</th>
+        <th data-sort="width">Width</th>
+        <th data-sort="ratio">Colour</th>
+        <th data-sort="verdict">Verdict</th>
+      </tr></thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</section>
+
+</div><!-- /rail-right -->
+
+<!-- ------------------------------------------------------ trace + table -->
+<section class="panel wide" id="panel-trace">
+  <h2>Return against azimuth <span class="hint">one line across the scene, log scale</span>
+    <span class="legend">
+      <i class="k-trace"></i>return <i class="k-bg"></i>background <i class="k-level"></i>alarm level
+      <i class="k-optic"></i>optic <i class="k-clutter"></i>clutter
+    </span>
+    <span class="rowpick">elevation row <b id="out-rowel">&mdash;</b>
+      <input type="range" id="in-row" min="0" max="0" step="1" value="0" /></span>
+  </h2>
+  <canvas id="cv-trace"></canvas>
+</section>
+
+<section class="panel" id="panel-waterfall">
+  <h2>Waterfall <span class="hint">a streak that stays is a standing optic</span></h2>
+  <canvas id="cv-waterfall"></canvas>
+  <div class="colourbar"><canvas id="cv-colourbar"></canvas>
+    <div class="cb-labels"><span id="cb-lo">&mdash;</span><span id="cb-hi">&mdash;</span></div>
+  </div>
+</section>
+
+<section class="panel" id="panel-polar">
+  <h2>Plan view <span class="hint">bearing and range</span>
+    <button class="btn tiny" id="btn-polar-hide">hide</button></h2>
+  <canvas id="cv-polar"></canvas>
+</section>
+
+
+<!-- ------------------------------------------------------------ overlays -->
+<div id="comparison" class="overlay-panel hidden">
+  <h2>Same scene, four conditions <button class="btn tiny" id="btn-comparison-close">close</button></h2>
+  <div id="comparison-body"><p class="note">Running all four&hellip;</p></div>
+</div>
+
+<div id="tutorial" class="hidden">
+  <div class="tut-card">
+    <div class="tut-step">Step <b id="tut-n">1</b> of 7</div>
+    <h3 id="tut-title"></h3>
+    <p id="tut-body"></p>
+    <div class="tut-buttons">
+      <button class="btn" id="tut-back">Back</button>
+      <button class="btn primary" id="tut-next">Next</button>
+      <button class="btn" id="tut-quit">Leave tutorial</button>
+    </div>
+  </div>
+</div>
+
+<div id="hunt-bar" class="hidden">
+  <span>HUNT</span>
+  <b id="hunt-clock">--</b>
+  <span id="hunt-msg">Find him before he fires.</span>
+  <span class="hunt-score">false alarms raised <b id="hunt-fa">0</b></span>
+</div>
+
+<div id="modal" class="hidden">
+  <div class="modal-card">
+    <button class="btn tiny modal-close" id="modal-close">close</button>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<div id="tip" class="hidden"></div>
+<div id="toast" class="hidden"></div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
